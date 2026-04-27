@@ -1,0 +1,8 @@
+{
+  "storage_rate": 95.0,
+  "yard_fee": 150.0,
+  "admin_fee": 350.0,
+  "tow_out": 175.0,
+  "tow_in": 175.0,
+  "tax_rate": 8.625
+}
