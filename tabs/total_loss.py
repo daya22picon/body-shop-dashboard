@@ -1,14 +1,3 @@
-# ============================================================
-# tabs/total_loss.py  —  Tab 3: Storage & Fees Calculator
-#
-# Features:
-#   - Editable fee settings saved to JSON
-#   - Save jobs to a log organized by year
-#   - Edit any saved job (updates in place)
-#   - Print preview with full invoice layout
-#   - Signature and date line on invoice
-# ============================================================
-
 import streamlit as st
 from datetime import date
 import pandas as pd
@@ -35,7 +24,13 @@ LOG_COLUMNS = [
 ]
 
 
-# ── Helpers ──────────────────────────────────────────────────
+def fmt_date(d):
+    """Convert YYYY-MM-DD to MM/DD/YYYY for display."""
+    try:
+        return date.fromisoformat(str(d)).strftime("%m/%d/%Y")
+    except Exception:
+        return str(d)
+
 
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
@@ -70,10 +65,6 @@ def save_log(df):
 
 
 def build_invoice_html(job, s):
-    """
-    Builds a full HTML invoice page for print preview.
-    Opens in a new browser tab — user clicks Print from there.
-    """
     return f"""
     <!DOCTYPE html>
     <html>
@@ -87,11 +78,10 @@ def build_invoice_html(job, s):
                 font-size: 13px;
                 color: #000;
                 padding: 40px;
-                max-width: 750px;
+                max-width: 100%;
                 margin: 0 auto;
+                padding: 20px;
             }}
-
-            /* ── Header ── */
             .header {{
                 text-align: center;
                 border-bottom: 3px solid #000;
@@ -114,8 +104,6 @@ def build_invoice_html(job, s):
                 color: #555;
                 margin-top: 6px;
             }}
-
-            /* ── Invoice title ── */
             .invoice-title {{
                 text-align: center;
                 font-size: 18px;
@@ -124,8 +112,6 @@ def build_invoice_html(job, s):
                 text-transform: uppercase;
                 letter-spacing: 2px;
             }}
-
-            /* ── Info grid ── */
             .info-grid {{
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -154,8 +140,6 @@ def build_invoice_html(job, s):
             }}
             .info-label {{ color: #555; }}
             .info-value {{ font-weight: bold; }}
-
-            /* ── Fee table ── */
             table {{
                 width: 100%;
                 border-collapse: collapse;
@@ -186,8 +170,6 @@ def build_invoice_html(job, s):
                 font-weight: bold;
             }}
             .amount {{ text-align: right; }}
-
-            /* ── Signature ── */
             .signature-section {{
                 margin-top: 40px;
                 border-top: 1px solid #ccc;
@@ -217,8 +199,6 @@ def build_invoice_html(job, s):
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
             }}
-
-            /* ── Footer ── */
             .footer {{
                 margin-top: 30px;
                 text-align: center;
@@ -227,8 +207,6 @@ def build_invoice_html(job, s):
                 border-top: 1px solid #eee;
                 padding-top: 10px;
             }}
-
-            /* ── Print button (hidden when printing) ── */
             .print-btn {{
                 display: block;
                 margin: 0 auto 30px;
@@ -248,10 +226,8 @@ def build_invoice_html(job, s):
         </style>
     </head>
     <body>
+        <button class="print-btn" onclick="window.print()">Print Invoice</button>
 
-        <button class="print-btn" onclick="window.print()">🖨️ Print Invoice</button>
-
-        <!-- Shop Header -->
         <div class="header">
             <div class="shop-name">All County Collision</div>
             <div class="shop-details">
@@ -265,7 +241,6 @@ def build_invoice_html(job, s):
 
         <div class="invoice-title">Storage Invoice</div>
 
-        <!-- Customer & Vehicle Info -->
         <div class="info-grid">
             <div class="info-box">
                 <h3>Customer Information</h3>
@@ -290,11 +265,11 @@ def build_invoice_html(job, s):
                 </div>
                 <div class="info-row">
                     <span class="info-label">Date In</span>
-                    <span class="info-value">{job.get('Date In', '—')}</span>
+                    <span class="info-value">{fmt_date(job.get('Date In', '—'))}</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Storage Until</span>
-                    <span class="info-value">{job.get('Storage Until', '—')}</span>
+                    <span class="info-value">{fmt_date(job.get('Storage Until', '—'))}</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Total Days</span>
@@ -303,7 +278,6 @@ def build_invoice_html(job, s):
             </div>
         </div>
 
-        <!-- Fee Breakdown Table -->
         <table>
             <thead>
                 <tr>
@@ -315,7 +289,7 @@ def build_invoice_html(job, s):
             <tbody>
                 <tr>
                     <td>Storage Fee</td>
-                    <td>{job.get('Total Days', '—')} days × $95/day</td>
+                    <td>{job.get('Total Days', '—')} days × ${s['storage_rate']}/day</td>
                     <td class="amount">{job.get('Storage Fee', '—')}</td>
                 </tr>
                 <tr>
@@ -353,7 +327,6 @@ def build_invoice_html(job, s):
             </tbody>
         </table>
 
-        <!-- Signature Section -->
         <div class="signature-section">
             <div class="sig-title">Release Authorization</div>
             <div class="sig-grid">
@@ -371,29 +344,26 @@ def build_invoice_html(job, s):
         <div class="footer">
             Thank you for your business · All County Collision · (516) 502-2712
         </div>
-
     </body>
     </html>
     """
 
 
-# ── Main Tab ─────────────────────────────────────────────────
-
 def show():
-    st.header("🧮 Storage & Fees Calculator")
+    st.header("Storage Fees Calculator")
 
     if "settings" not in st.session_state:
         st.session_state.settings = load_settings()
     if "job_log" not in st.session_state:
         st.session_state.job_log = load_log()
     if "editing_idx" not in st.session_state:
-        st.session_state.editing_idx = None  # tracks which job is being edited
+        st.session_state.editing_idx = None
 
     s = st.session_state.settings
 
     # ── Settings Panel ───────────────────────────────────────
-    with st.expander("⚙️ Fee Settings — click to edit prices", expanded=False):
-        st.markdown("Update any fee and click **Save Settings**. Applies to all future calculations.")
+    with st.expander("Fee Settings — click to edit prices", expanded=False):
+        st.markdown("Update any fee and click **Save Settings**.")
         col1, col2, col3 = st.columns(3)
         with col1:
             new_storage_rate = st.number_input("Storage Rate ($/day)", min_value=0.00, value=float(s["storage_rate"]), step=1.00, format="%.2f")
@@ -405,33 +375,31 @@ def show():
             new_tow_out  = st.number_input("Tow Out ($)",  min_value=0.00,  value=float(s["tow_out"]),  step=5.00,  format="%.2f")
             new_tax_rate = st.number_input("Tax Rate (%)", min_value=0.000, value=float(s["tax_rate"]), step=0.001, format="%.3f")
 
-        if st.button("💾 Save Settings", type="primary"):
+        if st.button("Save Settings", type="primary"):
             st.session_state.settings = {
                 "storage_rate": new_storage_rate, "yard_fee": new_yard_fee,
                 "admin_fee": new_admin_fee, "tow_out": new_tow_out,
                 "tow_in": new_tow_in, "tax_rate": new_tax_rate
             }
             save_settings(st.session_state.settings)
-            st.success("✅ Settings saved!")
+            st.success("Settings saved!")
             st.rerun()
 
     st.markdown("---")
 
-    # ── Determine default values for the form ────────────────
-    # If editing a saved job, pre-fill the form with that job's data
+    # ── Pre-fill form if editing ─────────────────────────────
     editing = st.session_state.editing_idx is not None
     log_df  = st.session_state.job_log
 
     if editing:
         job = log_df.loc[st.session_state.editing_idx]
-        st.info(f"✏️ Editing job **RO# {job['RO#']}** — update the fields below and click Save.")
+        st.info(f"Editing job **RO# {job['RO#']}** — update the fields and click Save.")
         default_ro       = job["RO#"]
         default_ins      = job["Insurance"]
         default_cust     = job["Customer Name"]
         default_vehicle  = job["Vehicle"]
         default_date_in  = date.fromisoformat(job["Date In"])
         default_date_out = date.fromisoformat(job["Storage Until"])
-        # Parse tow in from saved string like "$175.00"
         try:
             default_tow_in = float(job["Tow In"].replace("$", "").replace(",", ""))
         except Exception:
@@ -446,17 +414,17 @@ def show():
         default_tow_in   = float(s["tow_in"])
 
     # ── Job Form ─────────────────────────────────────────────
-    st.subheader("✏️ Edit Job" if editing else "New Job")
+    st.subheader("Edit Job" if editing else "New Job")
 
     col4, col5, col6 = st.columns(3)
     with col4:
-        ro_number = st.text_input("RO #", value=default_ro, placeholder="e.g. RO-1042")
+        ro_number = st.text_input("RO #", value=default_ro, placeholder="e.g. RO-1042", key="tl_ro")
     with col5:
-        insurance = st.text_input("Insurance Company", value=default_ins)
+        insurance = st.text_input("Insurance Company", value=default_ins, key="tl_insurance")
     with col6:
-        customer_name = st.text_input("Customer Name", value=default_cust)
+        customer_name = st.text_input("Customer Name", value=default_cust, key="tl_customer")
 
-    year_make_model = st.text_input("Year, Make & Model", value=default_vehicle, placeholder="e.g. 2018 Honda Accord")
+    year_make_model = st.text_input("Year, Make & Model", value=default_vehicle, placeholder="e.g. 2018 Honda Accord", key="tl_vehicle")
 
     st.markdown("#### Storage Period")
     col7, col8 = st.columns(2)
@@ -469,7 +437,7 @@ def show():
         total_days = (storage_until - date_in).days + 1
     else:
         total_days = 0
-        st.warning("⚠️ 'Storage Until' is before 'Date In' — check the dates.")
+        st.warning("'Storage Until' is before 'Date In' — check the dates.")
 
     storage_fee = total_days * s["storage_rate"]
 
@@ -497,20 +465,11 @@ def show():
     t1, t2, t3 = st.columns(3)
     t1.metric("Subtotal",                f"${subtotal:,.2f}")
     t2.metric(f"Tax ({s['tax_rate']}%)", f"${tax:,.2f}")
-    t3.metric("💰 Total",                f"${total:,.2f}")
+    t3.metric("Total",                f"${total:,.2f}")
 
+    
     st.markdown("---")
-    st.subheader("Itemized Breakdown")
-    breakdown = pd.DataFrame({
-        "Line Item": ["Storage Fee", "Tow In", "Yard Fee", "Admin / Labor Fee", "Tow Out", "Subtotal", f"Tax ({s['tax_rate']}%)", "TOTAL"],
-        "Amount":    [f"${storage_fee:,.2f}", f"${tow_in:,.2f}", f"${s['yard_fee']:,.2f}", f"${s['admin_fee']:,.2f}", f"${s['tow_out']:,.2f}", f"${subtotal:,.2f}", f"${tax:,.2f}", f"${total:,.2f}"],
-        "Note":      [f"{total_days} days × ${s['storage_rate']}/day", "Per job", "Fixed", "Fixed", "Fixed", "", "", ""]
-    })
-    st.dataframe(breakdown, use_container_width=True, hide_index=True)
-
-    # ── Save / Update button ─────────────────────────────────
-    st.markdown("---")
-    btn_label = "💾 Update Job" if editing else "💾 Save Job to Log"
+    btn_label = "Update Job" if editing else " Save Job to Log"
 
     if st.button(btn_label, type="primary", use_container_width=True):
         if not ro_number.strip():
@@ -525,26 +484,24 @@ def show():
                 "Admin Fee": f"${s['admin_fee']:,.2f}", "Tow Out": f"${s['tow_out']:,.2f}",
                 "Subtotal": f"${subtotal:,.2f}", "Tax": f"${tax:,.2f}",
                 "Total": f"${total:,.2f}", "Date Saved": str(date.today()),
-                "Year": str(date_in.year)   # used for grouping by year
+                "Year": str(date_in.year)
             }
 
             if editing:
-                # Overwrite the existing row in place
                 for key, val in job_record.items():
                     st.session_state.job_log.at[st.session_state.editing_idx, key] = val
                 st.session_state.editing_idx = None
-                st.success(f"✅ Job RO# {ro_number} updated!")
+                st.success(f" Job RO# {ro_number} updated!")
             else:
                 new_row = pd.DataFrame([job_record])
                 st.session_state.job_log = pd.concat(
                     [st.session_state.job_log, new_row], ignore_index=True
                 )
-                st.success(f"✅ Job RO# {ro_number} saved!")
+                st.success(f"Job RO# {ro_number} saved!")
 
             save_log(st.session_state.job_log)
             st.rerun()
 
-    # Cancel edit button
     if editing:
         if st.button("✖️ Cancel Edit", use_container_width=True):
             st.session_state.editing_idx = None
@@ -552,7 +509,7 @@ def show():
 
     # ── Job Log grouped by Year ──────────────────────────────
     st.markdown("---")
-    st.subheader("📋 Saved Job Log")
+    st.subheader(" Saved Job Log")
 
     log_df = st.session_state.job_log
 
@@ -562,7 +519,6 @@ def show():
 
     st.caption(f"{len(log_df)} total job(s) on record")
 
-    # Get all years present in the log, most recent first
     if "Year" not in log_df.columns or log_df["Year"].isna().all():
         log_df["Year"] = log_df["Date In"].str[:4]
 
@@ -570,32 +526,36 @@ def show():
 
     for year in years:
         year_jobs = log_df[log_df["Year"] == year].copy()
-        st.markdown(f"### 📅 {year}  —  {len(year_jobs)} job(s)")
+        st.markdown(f"### {year}  —  {len(year_jobs)} job(s)")
+
+        # Show dates in MM/DD/YYYY in the table
+        display_jobs = year_jobs[["RO#", "Customer Name", "Vehicle", "Date In", "Storage Until", "Total Days", "Total"]].copy()
+        display_jobs["Date In"]       = display_jobs["Date In"].apply(fmt_date)
+        display_jobs["Storage Until"] = display_jobs["Storage Until"].apply(fmt_date)
 
         event = st.dataframe(
-            year_jobs[["RO#", "Customer Name", "Vehicle", "Date In", "Storage Until", "Total Days", "Total"]],
+            display_jobs,
             use_container_width=True,
             hide_index=True,
             on_select="rerun",
             selection_mode="single-row",
-            key=f"log_{year}"   # unique key per year so Streamlit doesn't confuse them
+            key=f"log_{year}"
         )
 
         selected_rows = event.selection.rows
         if selected_rows:
-            # Map back to the original index in the full dataframe
             original_idx = year_jobs.iloc[selected_rows[0]].name
             job = log_df.loc[original_idx]
 
             st.markdown("---")
-            st.subheader(f"📄 {job['Customer Name'] or 'Job'}  |  RO# {job['RO#']}")
+            st.subheader(f"{job['Customer Name'] or 'Job'}  |  RO# {job['RO#']}")
 
             d1, d2 = st.columns(2)
             with d1:
                 st.write(f"**Insurance:** {job['Insurance'] or '—'}")
                 st.write(f"**Vehicle:** {job['Vehicle'] or '—'}")
-                st.write(f"**Date In:** {job['Date In']}")
-                st.write(f"**Storage Until:** {job['Storage Until']}")
+                st.write(f"**Date In:** {fmt_date(job['Date In'])}")
+                st.write(f"**Storage Until:** {fmt_date(job['Storage Until'])}")
                 st.write(f"**Total Days:** {job['Total Days']}")
             with d2:
                 st.write(f"**Storage Fee:** {job['Storage Fee']}")
@@ -606,30 +566,25 @@ def show():
                 st.write(f"**Tax:** {job['Tax']}")
                 st.markdown(f"### Total: {job['Total']}")
 
-            # Action buttons
             ba, bb, bc = st.columns(3)
 
             with ba:
-                if st.button("✏️ Edit this job", key=f"edit_{original_idx}"):
+                if st.button("Edit this job", key=f"edit_{original_idx}"):
                     st.session_state.editing_idx = original_idx
                     st.rerun()
 
             with bb:
-                # Print preview — generates HTML invoice and opens in new tab
-                invoice_html = build_invoice_html(job.to_dict(), s)
-                # Encode as base64 data URL so it opens in the browser
-                
-            if st.button("🖨️ Print Preview", key=f"print_{original_idx}", use_container_width=True):
-                current = st.session_state.get(f"show_preview_{original_idx}", False)
-                st.session_state[f"show_preview_{original_idx}"] = not current
+                if st.button("Print Preview", key=f"print_{original_idx}", use_container_width=True):
+                    current = st.session_state.get(f"show_preview_{original_idx}", False)
+                    st.session_state[f"show_preview_{original_idx}"] = not current
 
-            if st.session_state.get(f"show_preview_{original_idx}"):
-                import streamlit.components.v1 as components
-                invoice_html = build_invoice_html(job.to_dict(), s)
-                components.html(invoice_html, height=900, scrolling=True)
+                if st.session_state.get(f"show_preview_{original_idx}"):
+                    import streamlit.components.v1 as components
+                    invoice_html = build_invoice_html(job.to_dict(), s)
+                    components.html(invoice_html, height=1100, scrolling=False)
 
             with bc:
-                if st.button("🗑️ Delete", key=f"del_{original_idx}", type="secondary"):
+                if st.button("Delete", key=f"del_{original_idx}", type="secondary"):
                     st.session_state.job_log = log_df.drop(index=original_idx).reset_index(drop=True)
                     save_log(st.session_state.job_log)
                     st.success("Job deleted.")
